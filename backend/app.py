@@ -88,12 +88,11 @@ if st.button("Ingest"):
             "chunk_id": i,
         })
 
-    # SAFE Pinecone ingestion
     vectorstore = LangChainPinecone.from_texts(
         texts=texts,
         embedding=embeddings,
         metadatas=metadatas,
-        index_name=PINECONE_INDEX_NAME,
+        pinecone_index=pinecone_index, 
     )
 
     st.session_state.vectorstore = vectorstore
