@@ -1,4 +1,3 @@
-pinecone==0.0.0
 streamlit
 langchain
 langchain-community
@@ -6,5 +5,5 @@ langchain-groq
 langchain-text-splitters
 sentence-transformers
 cohere
-pinecone-client==2.2.4
+pinecone
 python-dotenv
