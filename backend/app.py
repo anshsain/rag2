@@ -1,11 +1,13 @@
 import os
 import streamlit as st
 import cohere
+import uuid
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores.qdrant import Qdrant
 from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance
 
 # ------------------ PAGE ------------------
 st.set_page_config(page_title="Mini RAG", layout="centered")
@@ -79,29 +81,49 @@ if st.button("Ingest"):
 
     docs = splitter.create_documents([text])
 
+    texts = []
+    metadatas = []
+    ids = []
+
     for i, doc in enumerate(docs):
-        doc.metadata = {
+        texts.append(doc.page_content)
+        metadatas.append({
             "source": "user_input",
             "chunk_id": i,
-        }
+        })
+        ids.append(str(uuid.uuid4()))
 
-    Qdrant.from_documents(
-        documents=docs,
-        embedding=embeddings,
+    # Create collection ONLY if it doesn't exist
+    collections = [c.name for c in qdrant_client.get_collections().collections]
+
+    if "mini_rag_docs" not in collections:
+        qdrant_client.create_collection(
+            collection_name="mini_rag_docs",
+            vectors_config=VectorParams(
+                size=384,  # MiniLM embedding size
+                distance=Distance.COSINE,
+            ),
+        )
+
+    # Attach LangChain vector store
+    vectorstore = Qdrant(
         client=qdrant_client,
         collection_name="mini_rag_docs",
-    )
-
-    st.session_state.vectorstore = Qdrant(
-        client=qdrant_client,
-        collection_name="mini_rag_docs",
         embedding=embeddings,
     )
 
+    # Add data (THIS is the stable call)
+    vectorstore.add_texts(
+        texts=texts,
+        metadatas=metadatas,
+        ids=ids,
+    )
+
+    st.session_state.vectorstore = vectorstore
     st.session_state.has_data = True
-    st.success(f"Ingested {len(docs)} chunks into hosted vector DB")
 
-
+    st.success(f"Ingested {len(texts)} chunks into hosted vector DB")
+    
 # ------------------ QUERY ------------------
 st.subheader("Ask a Question")
 
