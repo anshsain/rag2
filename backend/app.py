@@ -5,7 +5,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Pinecone as LangChainPinecone
-import pinecone
+from pinecone import Pinecone
 
 # ------------------ PAGE ------------------
 st.set_page_config(page_title="Mini RAG", layout="centered")
@@ -39,11 +39,8 @@ embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
 )
 
-# Pinecone init (safe)
-pinecone.init(
-    api_key=PINECONE_API_KEY,
-    environment="gcp-starter"  # works for free tier
-)
+pc = Pinecone(api_key=PINECONE_API_KEY)
+index = pc.Index(PINECONE_INDEX_NAME)
 
 # ------------------ SESSION ------------------
 if "vectorstore" not in st.session_state:
