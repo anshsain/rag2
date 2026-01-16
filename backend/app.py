@@ -5,7 +5,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Pinecone as LangChainPinecone
-import Pinecone
+import pinecone
 
 # ------------------ PAGE ------------------
 st.set_page_config(page_title="Mini RAG", layout="centered")
