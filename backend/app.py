@@ -151,7 +151,8 @@ if st.button("Ask"):
         st.stop()
 
     retrieved_docs = st.session_state.vectorstore.similarity_search(
-        question, k=8
+        question,
+        k=8,
     )
 
     docs = rerank_docs(question, retrieved_docs, top_n=3)
