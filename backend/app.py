@@ -37,7 +37,7 @@ embeddings = HuggingFaceEmbeddings(
 )
 
 pc = pinecone.Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index(PINECONE_INDEX_NAME
+index = pc.Index(PINECONE_INDEX_NAME)
 # ------------------ SESSION ------------------
 if "has_data" not in st.session_state:
     st.session_state.has_data = False
