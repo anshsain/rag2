@@ -96,15 +96,6 @@ if st.button("Ingest"):
     # Create collection ONLY if it doesn't exist
     collections = [c.name for c in qdrant_client.get_collections().collections]
 
-    if "mini_rag_docs" not in collections:
-        qdrant_client.create_collection(
-            collection_name="mini_rag_docs",
-            vectors_config=VectorParams(
-                size=384,  # MiniLM embedding size
-                distance=Distance.COSINE,
-            ),
-        )
-
     # Attach LangChain vector store
     vectorstore = Qdrant(
         client=qdrant_client,
