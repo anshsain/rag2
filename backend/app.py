@@ -5,7 +5,7 @@ import pinecone
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
 # ------------------ PAGE ------------------
