@@ -40,6 +40,7 @@ embeddings = HuggingFaceEmbeddings(
 qdrant_client = QdrantClient(
     url=QDRANT_URL,
     api_key=QDRANT_API_KEY,
+    prefer_grpc=False,
 )
 
 # ------------------ SESSION ------------------
@@ -91,6 +92,7 @@ if st.button("Ingest"):
         embedding=embeddings,
         client=qdrant_client,
         collection_name="mini_rag_docs",
+        force_recreate=True, 
     )
 
     st.session_state.has_data = True
