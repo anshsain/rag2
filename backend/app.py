@@ -1,25 +1,24 @@
 import os
 import streamlit as st
 import cohere
-import pinecone
-
+from pinecone import Pinecone
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
+from langchain.schema import Document
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Pinecone as LangChainPinecone
 
 # ------------------ PAGE ------------------
 st.set_page_config(page_title="Mini RAG", layout="centered")
 st.title("Mini RAG Application")
 
-# ------------------ ENV CHECK ------------------
+# ------------------ ENV ------------------
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
 
 if not all([GROQ_API_KEY, COHERE_API_KEY, PINECONE_API_KEY, PINECONE_INDEX_NAME]):
-    st.error("Missing one or more required environment variables.")
+    st.error("Missing environment variables")
     st.stop()
 
 # ------------------ CLIENTS ------------------
@@ -35,22 +34,16 @@ embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
 )
 
-# ------------------ PINECONE (v2 ONLY) ------------------
-pinecone.init(
-    api_key=PINECONE_API_KEY,
-    environment="gcp-starter"   # free tier safe
-)
+pc = Pinecone(api_key=PINECONE_API_KEY)
+index = pc.Index(PINECONE_INDEX_NAME)
 
 # ------------------ SESSION ------------------
-if "vectorstore" not in st.session_state:
-    st.session_state.vectorstore = None
-
 if "has_data" not in st.session_state:
     st.session_state.has_data = False
 
 # ------------------ RERANK ------------------
 def rerank_docs(query, docs, top_n=3):
-    texts = [doc.page_content for doc in docs]
+    texts = [d.page_content for d in docs]
     results = co.rerank(
         model="rerank-english-v3.0",
         query=query,
@@ -64,10 +57,6 @@ st.subheader("Ingest Document")
 text = st.text_area("Paste text to ingest", height=200)
 
 if st.button("Ingest"):
-    if not text.strip():
-        st.warning("Please paste some text.")
-        st.stop()
-
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=800,
         chunk_overlap=100,
@@ -75,47 +64,54 @@ if st.button("Ingest"):
 
     docs = splitter.create_documents([text])
 
-    texts, metadatas = [], []
+    vectors = embeddings.embed_documents([d.page_content for d in docs])
 
-    for i, doc in enumerate(docs):
-        texts.append(doc.page_content)
-        metadatas.append({
-            "source": "user_input",
-            "chunk_id": i,
+    upserts = []
+    for i, vec in enumerate(vectors):
+        upserts.append({
+            "id": f"chunk-{i}",
+            "values": vec,
+            "metadata": {
+                "text": docs[i].page_content,
+                "chunk_id": i,
+                "source": "user_input",
+            },
         })
 
-    vectorstore = LangChainPinecone.from_texts(
-        texts=texts,
-        embedding=embeddings,
-        metadatas=metadatas,
-        index_name=PINECONE_INDEX_NAME,
-    )
-
-    st.session_state.vectorstore = vectorstore
+    index.upsert(vectors=upserts)
     st.session_state.has_data = True
-    st.success(f"Ingested {len(texts)} chunks into Pinecone")
+
+    st.success(f"Ingested {len(upserts)} chunks into Pinecone")
 
 # ------------------ QUERY ------------------
 st.subheader("Ask a Question")
 question = st.text_input("Your question")
 
 if st.button("Ask"):
-    if not question.strip():
-        st.warning("Please enter a question.")
-        st.stop()
-
     if not st.session_state.has_data:
         st.warning("Please ingest a document first.")
         st.stop()
 
-    retrieved_docs = st.session_state.vectorstore.similarity_search(
-        question, k=8
+    q_vec = embeddings.embed_query(question)
+
+    res = index.query(
+        vector=q_vec,
+        top_k=8,
+        include_metadata=True,
     )
 
-    docs = rerank_docs(question, retrieved_docs, top_n=3)
+    docs = [
+        Document(
+            page_content=m["metadata"]["text"],
+            metadata=m["metadata"],
+        )
+        for m in res["matches"]
+    ]
+
+    docs = rerank_docs(question, docs, top_n=3)
 
     context = "\n\n".join(
-        [f"[{i+1}] {doc.page_content}" for i, doc in enumerate(docs)]
+        [f"[{i+1}] {d.page_content}" for i, d in enumerate(docs)]
     )
 
     prompt = f"""
@@ -135,6 +131,5 @@ Question:
     st.write(response.content)
 
     st.markdown("### Sources")
-    for i, doc in enumerate(docs):
-        meta = doc.metadata
-        st.markdown(f"[{i+1}] Source: {meta['source']} | Chunk ID: {meta['chunk_id']}")
+    for i, d in enumerate(docs):
+        st.markdown(f"[{i+1}] Chunk ID: {d.metadata['chunk_id']}")
