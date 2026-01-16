@@ -5,7 +5,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Pinecone as LangChainPinecone
-from pinecone import Pinecone
+import Pinecone
 
 # ------------------ PAGE ------------------
 st.set_page_config(page_title="Mini RAG", layout="centered")
@@ -40,8 +40,10 @@ embeddings = HuggingFaceEmbeddings(
 )
 
 # Pinecone init (safe)
-pc = Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index(PINECONE_INDEX_NAME)
+pinecone.init(
+    api_key=PINECONE_API_KEY,
+    environment="gcp-starter"  # works for free tier
+)
 
 # ------------------ SESSION ------------------
 if "vectorstore" not in st.session_state:
