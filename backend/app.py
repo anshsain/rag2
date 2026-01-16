@@ -92,7 +92,7 @@ if st.button("Ingest"):
         texts=texts,
         embedding=embeddings,
         metadatas=metadatas,
-        pinecone_index=pinecone_index, 
+        pinecone_index=index, 
     )
 
     st.session_state.vectorstore = vectorstore
