@@ -1,29 +1,29 @@
 import os
 import streamlit as st
 import cohere
-import uuid
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores.qdrant import Qdrant
-from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance, PointStruct
+from langchain_community.vectorstores import Pinecone as LangChainPinecone
+from pinecone import Pinecone
 
 # ------------------ PAGE ------------------
 st.set_page_config(page_title="Mini RAG", layout="centered")
 st.title("Mini RAG Application")
 
-st.write("GROQ_API_KEY present:", bool(os.getenv("GROQ_API_KEY")))
-st.write("QDRANT_URL present:", bool(os.getenv("QDRANT_URL")))
-
-# ------------------ KEYS ------------------
+# ------------------ ENV CHECK ------------------
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
-QDRANT_URL = os.getenv("QDRANT_URL")
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
 
-if not GROQ_API_KEY or not COHERE_API_KEY or not QDRANT_URL or not QDRANT_API_KEY:
-    st.error("One or more required API keys are missing.")
+st.write("GROQ_API_KEY present:", bool(GROQ_API_KEY))
+st.write("COHERE_API_KEY present:", bool(COHERE_API_KEY))
+st.write("PINECONE_API_KEY present:", bool(PINECONE_API_KEY))
+st.write("PINECONE_INDEX_NAME present:", bool(PINECONE_INDEX_NAME))
+
+if not all([GROQ_API_KEY, COHERE_API_KEY, PINECONE_API_KEY, PINECONE_INDEX_NAME]):
+    st.error("Missing one or more required environment variables.")
     st.stop()
 
 # ------------------ CLIENTS ------------------
@@ -39,10 +39,9 @@ embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
 )
 
-qdrant_client = QdrantClient(
-    url=QDRANT_URL,
-    api_key=QDRANT_API_KEY,
-)
+# Pinecone init (safe)
+pc = Pinecone(api_key=PINECONE_API_KEY)
+index = pc.Index(PINECONE_INDEX_NAME)
 
 # ------------------ SESSION ------------------
 if "vectorstore" not in st.session_state:
@@ -66,10 +65,7 @@ def rerank_docs(query, docs, top_n=3):
 
 # ------------------ INGEST ------------------
 st.subheader("Ingest Document")
-text = st.text_area("Paste text to ingest")
-st.write("Text length:", len(text))
-
-COLLECTION_NAME = "mini_rag_docs_final_v3"
+text = st.text_area("Paste text to ingest", height=200)
 
 if st.button("Ingest"):
     if not text.strip():
@@ -83,61 +79,31 @@ if st.button("Ingest"):
 
     docs = splitter.create_documents([text])
 
-    texts = [doc.page_content for doc in docs]
+    texts = []
+    metadatas = []
 
-    # 🔹 Compute embeddings explicitly
-    vectors = embeddings.embed_documents(texts)
-    vector_size = len(vectors[0])
-
-    # 🔹 Create collection ONCE with exact dimension
-    try:
-        qdrant_client.create_collection(
-            collection_name=COLLECTION_NAME,
-            vectors_config=VectorParams(
-                size=vector_size,
-                distance=Distance.COSINE,
-            ),
-        )
-    except Exception:
-        # Collection already exists → OK
-        pass
-
-    # 🔹 Build points manually (no LangChain magic)
-    points = []
-    for i, vector in enumerate(vectors):
-        points.append({
-            "id": str(uuid.uuid4()),
-            "vector": vector,
-            "payload": {
-                "text": texts[i],
-                "source": "user_input",
-                "chunk_id": i,
-            },
+    for i, doc in enumerate(docs):
+        texts.append(doc.page_content)
+        metadatas.append({
+            "source": "user_input",
+            "chunk_id": i,
         })
 
-
-    # 🔹 Raw upsert (this NEVER fails if schema is correct)
-    qdrant_client.upsert(
-        collection_name=COLLECTION_NAME,
-        points=points,
+    # SAFE Pinecone ingestion
+    vectorstore = LangChainPinecone.from_texts(
+        texts=texts,
+        embedding=embeddings,
+        metadatas=metadatas,
+        index_name=PINECONE_INDEX_NAME,
     )
 
-    # 🔹 Attach LangChain vectorstore ONLY for querying
-    st.session_state.vectorstore = Qdrant(
-        client=qdrant_client,
-        collection_name=COLLECTION_NAME,
-        embeddings=embeddings,
-    )
-
+    st.session_state.vectorstore = vectorstore
     st.session_state.has_data = True
-    st.success(f"Ingested {len(points)} chunks into hosted vector DB")
 
+    st.success(f"Ingested {len(texts)} chunks into Pinecone")
 
-
-    
 # ------------------ QUERY ------------------
 st.subheader("Ask a Question")
-
 question = st.text_input("Your question")
 
 if st.button("Ask"):
