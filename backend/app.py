@@ -81,9 +81,7 @@ if st.button("Ingest"):
 
     docs = splitter.create_documents([text])
 
-    texts = []
-    metadatas = []
-    ids = []
+    texts, metadatas, ids = [], [], []
 
     for i, doc in enumerate(docs):
         texts.append(doc.page_content)
@@ -93,17 +91,21 @@ if st.button("Ingest"):
         })
         ids.append(str(uuid.uuid4()))
 
-    # Create collection ONLY if it doesn't exist
-    collections = [c.name for c in qdrant_client.get_collections().collections]
+    # ALWAYS recreate collection (no checks, no permissions issues)
+    qdrant_client.recreate_collection(
+        collection_name="mini_rag_docs",
+        vectors_config=VectorParams(
+            size=384,
+            distance=Distance.COSINE,
+        ),
+    )
 
-    # Attach LangChain vector store
     vectorstore = Qdrant(
         client=qdrant_client,
         collection_name="mini_rag_docs",
         embedding=embeddings,
     )
 
-    # Add data (THIS is the stable call)
     vectorstore.add_texts(
         texts=texts,
         metadatas=metadatas,
@@ -114,6 +116,7 @@ if st.button("Ingest"):
     st.session_state.has_data = True
 
     st.success(f"Ingested {len(texts)} chunks into hosted vector DB")
+
     
 # ------------------ QUERY ------------------
 st.subheader("Ask a Question")
