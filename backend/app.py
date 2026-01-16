@@ -69,7 +69,7 @@ st.subheader("Ingest Document")
 text = st.text_area("Paste text to ingest")
 st.write("Text length:", len(text))
 
-COLLECTION_NAME = "mini_rag_docs_final"
+COLLECTION_NAME = "mini_rag_docs_final_v3"
 
 if st.button("Ingest"):
     if not text.strip():
@@ -83,45 +83,56 @@ if st.button("Ingest"):
 
     docs = splitter.create_documents([text])
 
-    texts, metadatas, ids = [], [], []
+    texts = [doc.page_content for doc in docs]
 
-    for i, doc in enumerate(docs):
-        texts.append(doc.page_content)
-        metadatas.append({
-            "source": "user_input",
-            "chunk_id": i,
-        })
-        ids.append(str(uuid.uuid4()))
+    # 🔹 Compute embeddings explicitly
+    vectors = embeddings.embed_documents(texts)
+    vector_size = len(vectors[0])
 
-    # ✅ Create collection ONCE (no delete)
+    # 🔹 Create collection ONCE with exact dimension
     try:
         qdrant_client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(
-                size=384,                # MiniLM dimension
-                distance=Distance.COSINE
+                size=vector_size,
+                distance=Distance.COSINE,
             ),
         )
     except Exception:
-        # Collection already exists → SAFE to ignore
+        # Collection already exists → OK
         pass
 
-    vectorstore = Qdrant(
+    # 🔹 Build points manually (no LangChain magic)
+    points = []
+    for i, vector in enumerate(vectors):
+        points.append(
+            PointStruct(
+                id=str(uuid.uuid4()),
+                vector=vector,
+                payload={
+                    "text": texts[i],
+                    "source": "user_input",
+                    "chunk_id": i,
+                },
+            )
+        )
+
+    # 🔹 Raw upsert (this NEVER fails if schema is correct)
+    qdrant_client.upsert(
+        collection_name=COLLECTION_NAME,
+        points=points,
+    )
+
+    # 🔹 Attach LangChain vectorstore ONLY for querying
+    st.session_state.vectorstore = Qdrant(
         client=qdrant_client,
         collection_name=COLLECTION_NAME,
         embeddings=embeddings,
     )
 
-    vectorstore.add_texts(
-        texts=texts,
-        metadatas=metadatas,
-        ids=ids,
-    )
-
-    st.session_state.vectorstore = vectorstore
     st.session_state.has_data = True
+    st.success(f"Ingested {len(points)} chunks into hosted vector DB")
 
-    st.success(f"Ingested {len(texts)} chunks into hosted vector DB")
 
 
     
