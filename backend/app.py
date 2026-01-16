@@ -95,7 +95,7 @@ if st.button("Ingest"):
     vectorstore = Qdrant(
         client=qdrant_client,
         collection_name="mini_rag_docs",
-        embedding=embeddings,
+        embeddings=embeddings,
     )
 
     # SAFE OPERATION (upsert only)
