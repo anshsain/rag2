@@ -18,11 +18,6 @@ COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
 
-st.write("GROQ_API_KEY present:", bool(GROQ_API_KEY))
-st.write("COHERE_API_KEY present:", bool(COHERE_API_KEY))
-st.write("PINECONE_API_KEY present:", bool(PINECONE_API_KEY))
-st.write("PINECONE_INDEX_NAME present:", bool(PINECONE_INDEX_NAME))
-
 if not all([GROQ_API_KEY, COHERE_API_KEY, PINECONE_API_KEY, PINECONE_INDEX_NAME]):
     st.error("Missing one or more required environment variables.")
     st.stop()
@@ -40,10 +35,10 @@ embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
 )
 
-# ------------------ PINECONE INIT (v2 SAFE) ------------------
+# ------------------ PINECONE (v2 ONLY) ------------------
 pinecone.init(
     api_key=PINECONE_API_KEY,
-    environment="gcp-starter"  # works for free tier
+    environment="gcp-starter"   # free tier safe
 )
 
 # ------------------ SESSION ------------------
@@ -56,14 +51,12 @@ if "has_data" not in st.session_state:
 # ------------------ RERANK ------------------
 def rerank_docs(query, docs, top_n=3):
     texts = [doc.page_content for doc in docs]
-
     results = co.rerank(
         model="rerank-english-v3.0",
         query=query,
         documents=texts,
         top_n=top_n,
     )
-
     return [docs[r.index] for r in results.results]
 
 # ------------------ INGEST ------------------
@@ -82,8 +75,7 @@ if st.button("Ingest"):
 
     docs = splitter.create_documents([text])
 
-    texts = []
-    metadatas = []
+    texts, metadatas = [], []
 
     for i, doc in enumerate(docs):
         texts.append(doc.page_content)
@@ -92,7 +84,6 @@ if st.button("Ingest"):
             "chunk_id": i,
         })
 
-    # ✅ SAFE Pinecone ingestion (LangChain v2 compatible)
     vectorstore = LangChainPinecone.from_texts(
         texts=texts,
         embedding=embeddings,
@@ -102,7 +93,6 @@ if st.button("Ingest"):
 
     st.session_state.vectorstore = vectorstore
     st.session_state.has_data = True
-
     st.success(f"Ingested {len(texts)} chunks into Pinecone")
 
 # ------------------ QUERY ------------------
@@ -119,15 +109,10 @@ if st.button("Ask"):
         st.stop()
 
     retrieved_docs = st.session_state.vectorstore.similarity_search(
-        question,
-        k=8,
+        question, k=8
     )
 
     docs = rerank_docs(question, retrieved_docs, top_n=3)
-
-    if not docs:
-        st.warning("No relevant context found.")
-        st.stop()
 
     context = "\n\n".join(
         [f"[{i+1}] {doc.page_content}" for i, doc in enumerate(docs)]
@@ -144,19 +129,12 @@ Question:
 {question}
 """
 
-    try:
-        response = llm.invoke(prompt)
+    response = llm.invoke(prompt)
 
-        st.markdown("### Answer")
-        st.write(response.content)
+    st.markdown("### Answer")
+    st.write(response.content)
 
-        st.markdown("### Sources")
-        for i, doc in enumerate(docs):
-            meta = doc.metadata
-            st.markdown(
-                f"[{i+1}] Source: {meta['source']} | Chunk ID: {meta['chunk_id']}"
-            )
-
-    except Exception as e:
-        st.error("LLM failed.")
-        st.exception(e)
+    st.markdown("### Sources")
+    for i, doc in enumerate(docs):
+        meta = doc.metadata
+        st.markdown(f"[{i+1}] Source: {meta['source']} | Chunk ID: {meta['chunk_id']}")
