@@ -69,6 +69,8 @@ st.subheader("Ingest Document")
 text = st.text_area("Paste text to ingest")
 st.write("Text length:", len(text))
 
+COLLECTION_NAME = "mini_rag_docs_final"
+
 if st.button("Ingest"):
     if not text.strip():
         st.warning("Please paste some text.")
@@ -91,9 +93,22 @@ if st.button("Ingest"):
         })
         ids.append(str(uuid.uuid4()))
 
+    # ✅ Create collection ONCE (no delete)
+    try:
+        qdrant_client.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(
+                size=384,                # MiniLM dimension
+                distance=Distance.COSINE
+            ),
+        )
+    except Exception:
+        # Collection already exists → SAFE to ignore
+        pass
+
     vectorstore = Qdrant(
         client=qdrant_client,
-        collection_name="mini_rag_docs_v2",  # 👈 NEW NAME
+        collection_name=COLLECTION_NAME,
         embeddings=embeddings,
     )
 
@@ -107,6 +122,7 @@ if st.button("Ingest"):
     st.session_state.has_data = True
 
     st.success(f"Ingested {len(texts)} chunks into hosted vector DB")
+
 
     
 # ------------------ QUERY ------------------
