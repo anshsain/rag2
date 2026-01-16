@@ -7,7 +7,7 @@ from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores.qdrant import Qdrant
 from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance
+from qdrant_client.models import VectorParams, Distance, PointStruct
 
 # ------------------ PAGE ------------------
 st.set_page_config(page_title="Mini RAG", layout="centered")
@@ -105,17 +105,16 @@ if st.button("Ingest"):
     # 🔹 Build points manually (no LangChain magic)
     points = []
     for i, vector in enumerate(vectors):
-        points.append(
-            PointStruct(
-                id=str(uuid.uuid4()),
-                vector=vector,
-                payload={
-                    "text": texts[i],
-                    "source": "user_input",
-                    "chunk_id": i,
-                },
-            )
-        )
+        points.append({
+            "id": str(uuid.uuid4()),
+            "vector": vector,
+            "payload": {
+                "text": texts[i],
+                "source": "user_input",
+                "chunk_id": i,
+            },
+        })
+
 
     # 🔹 Raw upsert (this NEVER fails if schema is correct)
     qdrant_client.upsert(
