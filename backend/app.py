@@ -1,11 +1,12 @@
 import os
 import streamlit as st
 import cohere
+import pinecone
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Pinecone as LangChainPinecone
-from pinecone import Pinecone
 
 # ------------------ PAGE ------------------
 st.set_page_config(page_title="Mini RAG", layout="centered")
@@ -39,8 +40,11 @@ embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
 )
 
-pc = Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index(PINECONE_INDEX_NAME)
+# ------------------ PINECONE INIT (v2 SAFE) ------------------
+pinecone.init(
+    api_key=PINECONE_API_KEY,
+    environment="gcp-starter"  # works for free tier
+)
 
 # ------------------ SESSION ------------------
 if "vectorstore" not in st.session_state:
@@ -88,11 +92,12 @@ if st.button("Ingest"):
             "chunk_id": i,
         })
 
+    # ✅ SAFE Pinecone ingestion (LangChain v2 compatible)
     vectorstore = LangChainPinecone.from_texts(
         texts=texts,
         embedding=embeddings,
         metadatas=metadatas,
-        pinecone_index=index, 
+        index_name=PINECONE_INDEX_NAME,
     )
 
     st.session_state.vectorstore = vectorstore
