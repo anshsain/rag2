@@ -1,7 +1,8 @@
 import os
 import streamlit as st
 import cohere
-import Pinecone
+import pinecone
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain.schema import Document
@@ -12,8 +13,6 @@ st.set_page_config(page_title="Mini RAG", layout="centered")
 st.title("Mini RAG Application")
 
 # ------------------ ENV ------------------
-st.write("Pinecone module:", pinecone)
-st.write("Has Pinecone class:", hasattr(pinecone, "Pinecone"))
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
@@ -36,8 +35,10 @@ embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
 )
 
+# ------------------ PINECONE (v3) ------------------
 pc = pinecone.Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(PINECONE_INDEX_NAME)
+
 # ------------------ SESSION ------------------
 if "has_data" not in st.session_state:
     st.session_state.has_data = False
@@ -58,13 +59,16 @@ st.subheader("Ingest Document")
 text = st.text_area("Paste text to ingest", height=200)
 
 if st.button("Ingest"):
+    if not text.strip():
+        st.warning("Please paste some text.")
+        st.stop()
+
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=800,
         chunk_overlap=100,
     )
 
     docs = splitter.create_documents([text])
-
     vectors = embeddings.embed_documents([d.page_content for d in docs])
 
     upserts = []
@@ -81,7 +85,6 @@ if st.button("Ingest"):
 
     index.upsert(vectors=upserts)
     st.session_state.has_data = True
-
     st.success(f"Ingested {len(upserts)} chunks into Pinecone")
 
 # ------------------ QUERY ------------------
