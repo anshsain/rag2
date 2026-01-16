@@ -91,21 +91,14 @@ if st.button("Ingest"):
         })
         ids.append(str(uuid.uuid4()))
 
-    # ALWAYS recreate collection (no checks, no permissions issues)
-    qdrant_client.recreate_collection(
-        collection_name="mini_rag_docs",
-        vectors_config=VectorParams(
-            size=384,
-            distance=Distance.COSINE,
-        ),
-    )
-
+    # Attach to EXISTING collection (or auto-create on first insert)
     vectorstore = Qdrant(
         client=qdrant_client,
         collection_name="mini_rag_docs",
         embedding=embeddings,
     )
 
+    # SAFE OPERATION (upsert only)
     vectorstore.add_texts(
         texts=texts,
         metadatas=metadatas,
@@ -116,7 +109,6 @@ if st.button("Ingest"):
     st.session_state.has_data = True
 
     st.success(f"Ingested {len(texts)} chunks into hosted vector DB")
-
     
 # ------------------ QUERY ------------------
 st.subheader("Ask a Question")
