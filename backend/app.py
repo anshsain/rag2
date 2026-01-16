@@ -94,7 +94,7 @@ if st.button("Ingest"):
     # Attach to EXISTING collection (or auto-create on first insert)
     vectorstore = Qdrant(
         client=qdrant_client,
-        collection_name="mini_rag_docs",
+        collection_name="mini_rag_docs_v2",
         embeddings=embeddings,
     )
 
