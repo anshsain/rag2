@@ -4,7 +4,7 @@ import cohere
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Qdrant
+from langchain_community.vectorstores.qdrant import Qdrant
 from qdrant_client import QdrantClient
 
 # ------------------ PAGE ------------------
@@ -40,7 +40,6 @@ embeddings = HuggingFaceEmbeddings(
 qdrant_client = QdrantClient(
     url=QDRANT_URL,
     api_key=QDRANT_API_KEY,
-    prefer_grpc=False,
 )
 
 # ------------------ SESSION ------------------
@@ -64,10 +63,6 @@ def rerank_docs(query, docs, top_n=3):
     return [docs[r.index] for r in results.results]
 
 # ------------------ INGEST ------------------
-st.subheader("Ingest Document")
-
-text = st.text_area("Paste text to ingest")
-
 if st.button("Ingest"):
     if not text.strip():
         st.warning("Please paste some text.")
@@ -80,23 +75,28 @@ if st.button("Ingest"):
 
     docs = splitter.create_documents([text])
 
-    # Attach metadata for citation mapping
     for i, doc in enumerate(docs):
         doc.metadata = {
             "source": "user_input",
             "chunk_id": i,
         }
 
-    st.session_state.vectorstore = Qdrant.from_documents(
+    Qdrant.from_documents(
         documents=docs,
         embedding=embeddings,
         client=qdrant_client,
         collection_name="mini_rag_docs",
-        force_recreate=True, 
+    )
+
+    st.session_state.vectorstore = Qdrant(
+        client=qdrant_client,
+        collection_name="mini_rag_docs",
+        embedding=embeddings,
     )
 
     st.session_state.has_data = True
     st.success(f"Ingested {len(docs)} chunks into hosted vector DB")
+
 
 # ------------------ QUERY ------------------
 st.subheader("Ask a Question")
