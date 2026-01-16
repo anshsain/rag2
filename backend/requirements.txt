@@ -5,5 +5,5 @@ langchain-groq
 langchain-text-splitters
 sentence-transformers
 cohere
-pinecone
+pinecone-client==2.2.4
 python-dotenv
