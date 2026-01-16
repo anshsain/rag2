@@ -1,7 +1,7 @@
 import os
 import streamlit as st
 import cohere
-from pinecone import Pinecone
+import Pinecone
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain.schema import Document
@@ -12,6 +12,8 @@ st.set_page_config(page_title="Mini RAG", layout="centered")
 st.title("Mini RAG Application")
 
 # ------------------ ENV ------------------
+st.write("Pinecone module:", pinecone)
+st.write("Has Pinecone class:", hasattr(pinecone, "Pinecone"))
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
@@ -34,9 +36,8 @@ embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
 )
 
-pc = Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index(PINECONE_INDEX_NAME)
-
+pc = pinecone.Pinecone(api_key=PINECONE_API_KEY)
+index = pc.Index(PINECONE_INDEX_NAME
 # ------------------ SESSION ------------------
 if "has_data" not in st.session_state:
     st.session_state.has_data = False
