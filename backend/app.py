@@ -63,6 +63,10 @@ def rerank_docs(query, docs, top_n=3):
     return [docs[r.index] for r in results.results]
 
 # ------------------ INGEST ------------------
+st.subheader("Ingest Document")
+text = st.text_area("Paste text to ingest")
+st.write("Text length:", len(text))
+
 if st.button("Ingest"):
     if not text.strip():
         st.warning("Please paste some text.")
