@@ -1,0 +1,15 @@
+streamlit
+
+langchain
+langchain-community
+langchain-groq
+langchain-text-splitters
+
+qdrant-client
+
+sentence-transformers
+huggingface-hub
+
+cohere
+
+python-dotenv
